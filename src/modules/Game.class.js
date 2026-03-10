@@ -7,9 +7,11 @@ class Game {
   static STATUS_LOSE = 'lose';
 
   constructor(initialState = null) {
-    this.initialState = initialState
-      ? initialState.map((row) => [...row])
-      : this.createEmptyBoard();
+    if (Array.isArray(initialState)) {
+      this.initialState = initialState.map((row) => [...row]);
+    } else {
+      this.initialState = this.createEmptyBoard();
+    }
 
     this.restart();
   }
@@ -42,7 +44,7 @@ class Game {
   }
 
   restart() {
-    this.board = this.initialState.map((row) => [...row]);
+    this.board = this.createEmptyBoard();
     this.score = 0;
     this.status = Game.STATUS_IDLE;
   }

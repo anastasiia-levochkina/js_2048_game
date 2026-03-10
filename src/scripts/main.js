@@ -2,6 +2,8 @@
 
 const game = new window.Game();
 
+window.game = game;
+
 const gameField = document.querySelector('.game-field');
 const startButton = document.querySelector('.button');
 const scoreElement = document.querySelector('.game-score');
