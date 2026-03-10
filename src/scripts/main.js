@@ -2,131 +2,183 @@
 
 const game = new window.Game();
 
+const gameField = document.querySelector('.game-field');
 const startButton = document.querySelector('.button');
 const scoreElement = document.querySelector('.game-score');
-const gameFieldElement = document.querySelector('.game-field');
-const loseMessageElement = document.querySelector('.message-lose');
-const winMessageElement = document.querySelector('.message-win');
-const startMessageElement = document.querySelector('.message-start');
-const cells = [...document.querySelectorAll('.field-cell')];
+const loseMessage = document.querySelector('.message-lose');
+const winMessage = document.querySelector('.message-win');
+const startMessage = document.querySelector('.message-start');
+const cellElements = Array.from(document.querySelectorAll('.field-cell'));
 
-const HIDDEN_CLASS = 'hidden';
-const CELL_BASE_CLASS = 'field-cell';
-const CELL_VALUE_CLASS_PREFIX = 'field-cell--';
+const SHAKE_DURATION_MS = 400;
+const TILE_ANIMATION_MS = 250;
 
-function getCellIndex(row, col) {
-  return row * 4 + col;
+function clearTileClasses(cell) {
+  const tileClasses = Array.from(cell.classList).filter((className) => {
+    return className.startsWith('field-cell--');
+  });
+
+  cell.classList.remove(...tileClasses);
+  cell.classList.remove('tile-new');
+  cell.classList.remove('tile-merge');
 }
 
-function hideAllMessages() {
-  loseMessageElement.classList.add(HIDDEN_CLASS);
-  winMessageElement.classList.add(HIDDEN_CLASS);
-  startMessageElement.classList.add(HIDDEN_CLASS);
-}
+function animateCell(cell, className, duration) {
+  cell.classList.add(className);
 
-function updateMessages(gameStatus) {
-  hideAllMessages();
-
-  if (gameStatus === window.Game.STATUS_IDLE) {
-    startMessageElement.classList.remove(HIDDEN_CLASS);
-  }
-
-  if (gameStatus === window.Game.STATUS_WIN) {
-    winMessageElement.classList.remove(HIDDEN_CLASS);
-  }
-
-  if (gameStatus === window.Game.STATUS_LOSE) {
-    loseMessageElement.classList.remove(HIDDEN_CLASS);
-  }
-}
-
-function updateButton(gameStatus) {
-  if (gameStatus === window.Game.STATUS_IDLE) {
-    startButton.textContent = 'Start';
-    startButton.classList.add('start');
-    startButton.classList.remove('restart');
-
-    return;
-  }
-
-  startButton.textContent = 'Restart';
-  startButton.classList.remove('start');
-  startButton.classList.add('restart');
+  setTimeout(() => {
+    cell.classList.remove(className);
+  }, duration);
 }
 
 function renderBoard(previousState = null) {
-  const state = game.getState();
+  const currentState = game.getState();
 
   for (let row = 0; row < 4; row++) {
     for (let col = 0; col < 4; col++) {
-      const index = getCellIndex(row, col);
-      const cell = cells[index];
-      const value = state[row][col];
+      const index = row * 4 + col;
+      const cell = cellElements[index];
+      const value = currentState[row][col];
+      const previousValue = previousState ? previousState[row][col] : 0;
 
-      cell.className = CELL_BASE_CLASS;
-      cell.textContent = value ? String(value) : '';
+      clearTileClasses(cell);
 
-      if (value) {
-        cell.classList.add(`${CELL_VALUE_CLASS_PREFIX}${value}`);
+      if (value === 0) {
+        cell.textContent = '';
+
+        continue;
       }
 
-      if (previousState && previousState[row][col] === 0 && value !== 0) {
-        cell.classList.add('tile-new');
+      cell.textContent = value;
+      cell.classList.add(`field-cell--${value}`);
+
+      if (previousState && previousValue === 0) {
+        animateCell(cell, 'tile-new', TILE_ANIMATION_MS);
+      }
+
+      if (previousState && previousValue !== 0 && previousValue !== value) {
+        animateCell(cell, 'tile-merge', TILE_ANIMATION_MS);
       }
     }
   }
 }
 
-function render(previousState = null) {
-  const gameStatus = game.getStatus();
-
-  renderBoard(previousState);
-  scoreElement.textContent = String(game.getScore());
-  updateMessages(gameStatus);
-  updateButton(gameStatus);
+function renderScore() {
+  scoreElement.textContent = game.getScore();
 }
 
-function handleMove(keyboardEvent) {
-  if (game.getStatus() !== window.Game.STATUS_PLAYING) {
+function setMessageVisibility({ lose = false, win = false, start = false }) {
+  loseMessage.classList.toggle('hidden', !lose);
+  winMessage.classList.toggle('hidden', !win);
+  startMessage.classList.toggle('hidden', !start);
+}
+
+function renderStatus() {
+  const gameStatus = game.getStatus();
+
+  if (gameStatus === 'idle') {
+    setMessageVisibility({ start: true });
+    gameField.classList.remove('shake');
+
     return;
   }
 
-  const handlersByKey = {
-    ArrowLeft: () => game.moveLeft(),
-    ArrowRight: () => game.moveRight(),
-    ArrowUp: () => game.moveUp(),
-    ArrowDown: () => game.moveDown(),
-  };
-  const move = handlersByKey[keyboardEvent.key];
+  if (gameStatus === 'win') {
+    setMessageVisibility({ win: true });
 
-  if (!move) {
     return;
+  }
+
+  if (gameStatus === 'lose') {
+    setMessageVisibility({ lose: true });
+    gameField.classList.add('shake');
+
+    setTimeout(() => {
+      gameField.classList.remove('shake');
+    }, SHAKE_DURATION_MS);
+
+    return;
+  }
+
+  setMessageVisibility({});
+}
+
+function render(previousState = null) {
+  renderBoard(previousState);
+  renderScore();
+  renderStatus();
+}
+
+function setButtonToRestart() {
+  startButton.textContent = 'Restart';
+  startButton.classList.remove('start');
+  startButton.classList.add('restart');
+}
+
+function setButtonToStart() {
+  startButton.textContent = 'Start';
+  startButton.classList.remove('restart');
+  startButton.classList.add('start');
+}
+
+function startGame() {
+  game.start();
+  setButtonToRestart();
+  render();
+}
+
+function restartGame() {
+  game.restart();
+  setButtonToStart();
+  render();
+}
+
+function handleMove(keyboardEvent) {
+  if (game.getStatus() !== 'playing') {
+    return;
+  }
+
+  const previousState = game.getState();
+  let moved = false;
+
+  switch (keyboardEvent.key) {
+    case 'ArrowLeft':
+      moved = game.moveLeft();
+      break;
+
+    case 'ArrowRight':
+      moved = game.moveRight();
+      break;
+
+    case 'ArrowUp':
+      moved = game.moveUp();
+      break;
+
+    case 'ArrowDown':
+      moved = game.moveDown();
+      break;
+
+    default:
+      return;
   }
 
   keyboardEvent.preventDefault();
 
-  const previousState = game.getState();
-  const isMoved = move();
+  if (moved) {
+    render(previousState);
+  }
+}
 
-  if (!isMoved) {
+startButton.addEventListener('click', () => {
+  if (game.getStatus() === 'idle') {
+    startGame();
+
     return;
   }
 
-  render(previousState);
-}
+  restartGame();
+});
 
-function handleStartButtonClick() {
-  if (game.getStatus() === window.Game.STATUS_IDLE) {
-    game.start();
-  } else {
-    game.restart();
-    gameFieldElement.classList.remove('shake');
-  }
-
-  render();
-}
-
-startButton.addEventListener('click', handleStartButtonClick);
 document.addEventListener('keydown', handleMove);
 
 render();
